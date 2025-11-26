@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useCustomElementContext } from './CustomElementContext';
-import { parseValue, serializeValue, type PDFValue, type Annotation } from './value';
+import { serializeValue, type PDFValue, type Annotation } from './value';
 import { promptToSelectAssets } from './selectors';
 
 export function useConfig() {
@@ -45,7 +45,16 @@ export function useSelectPDFAsset() {
   const { api } = useCustomElementContext();
 
   return useCallback(async () => {
-    if (!api) return null;
+    if (!api) {
+      console.warn('Custom Element API not initialized yet');
+      return null;
+    }
+
+    // Double-check that we're in a Kontent.ai environment
+    if (typeof window === 'undefined' || !window.CustomElement) {
+      console.error('Not running in Kontent.ai environment');
+      return null;
+    }
 
     try {
       const assets = await promptToSelectAssets(api, {
@@ -53,12 +62,17 @@ export function useSelectPDFAsset() {
         fileType: 'any',
       });
 
-      if (assets.length > 0) {
+      if (assets && assets.length > 0) {
         return assets[0];
       }
       return null;
     } catch (error) {
       console.error('Error selecting asset:', error);
+      // Don't show error to user if it's just that the method isn't available
+      // (might be running outside Kontent.ai)
+      if (error instanceof Error && error.message.includes('not available')) {
+        console.warn('Asset selection is not available in this context');
+      }
       return null;
     }
   }, [api]);

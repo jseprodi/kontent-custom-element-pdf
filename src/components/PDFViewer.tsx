@@ -12,8 +12,6 @@ interface PDFViewerProps {
   pdfData?: string; // base64
   annotations: Annotation[];
   onAnnotationAdd?: (annotation: Omit<Annotation, 'id' | 'timestamp'>) => void;
-  onAnnotationUpdate?: (id: string, updates: Partial<Annotation>) => void;
-  onAnnotationDelete?: (id: string) => void;
   allowAnnotations?: boolean;
   disabled?: boolean;
 }
@@ -23,8 +21,6 @@ export function PDFViewer({
   pdfData,
   annotations,
   onAnnotationAdd,
-  onAnnotationUpdate,
-  onAnnotationDelete,
   allowAnnotations = true,
   disabled = false,
 }: PDFViewerProps) {
@@ -41,6 +37,7 @@ export function PDFViewer({
   );
   const [drawingPath, setDrawingPath] = useState<Array<{ x: number; y: number }>>([]);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingPageNum, setDrawingPageNum] = useState<number>(1);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Load PDF
@@ -66,14 +63,14 @@ export function PDFViewer({
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
           }
-          loadingTask = pdfjsLib.getDocument({ data: bytes }).promise;
+          loadingTask = pdfjsLib.getDocument({ data: bytes });
         } else if (pdfUrl) {
-          loadingTask = pdfjsLib.getDocument({ url: pdfUrl }).promise;
+          loadingTask = pdfjsLib.getDocument({ url: pdfUrl });
         } else {
           throw new Error('No PDF source available');
         }
 
-        const pdf = await loadingTask;
+        const pdf = await loadingTask.promise;
         setPdfDocument(pdf);
         setNumPages(pdf.numPages);
       } catch (err) {
@@ -115,7 +112,7 @@ export function PDFViewer({
 
         // Render annotations for this page
         const pageAnnotations = annotations.filter((ann) => ann.page === pageNum);
-        renderAnnotations(context, pageAnnotations, viewport);
+        renderAnnotations(context, pageAnnotations);
       } catch (err) {
         console.error(`Error rendering page ${pageNum}:`, err);
       }
@@ -126,8 +123,7 @@ export function PDFViewer({
   // Render annotations on canvas
   const renderAnnotations = (
     context: CanvasRenderingContext2D,
-    pageAnnotations: Annotation[],
-    viewport: pdfjsLib.PageViewport
+    pageAnnotations: Annotation[]
   ) => {
     pageAnnotations.forEach((annotation) => {
       context.save();
@@ -224,7 +220,7 @@ export function PDFViewer({
     [allowAnnotations, disabled, annotationMode, onAnnotationAdd]
   );
 
-  // Handle drawing
+  // Handle drawing - mouse down
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>, pageNum: number) => {
       if (!allowAnnotations || disabled || annotationMode !== 'drawing') return;
@@ -235,11 +231,13 @@ export function PDFViewer({
       const y = e.clientY - rect.top;
 
       setIsDrawing(true);
+      setDrawingPageNum(pageNum);
       setDrawingPath([{ x, y }]);
     },
     [allowAnnotations, disabled, annotationMode]
   );
 
+  // Handle drawing - mouse move
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!isDrawing || !allowAnnotations || disabled) return;
@@ -249,27 +247,36 @@ export function PDFViewer({
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
-      setDrawingPath((prev) => [...prev, { x, y }]);
+      setDrawingPath((prev: Array<{ x: number; y: number }>) => [...prev, { x, y }]);
     },
     [isDrawing, allowAnnotations, disabled]
   );
 
+  // Handle drawing - mouse up
   const handleCanvasMouseUp = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>, pageNum: number) => {
+    (_e: React.MouseEvent<HTMLCanvasElement>, pageNum: number) => {
       if (!isDrawing || !allowAnnotations || disabled) return;
 
       setIsDrawing(false);
       if (drawingPath.length > 1 && onAnnotationAdd) {
+        // Calculate bounding box for drawing
+        const xs = drawingPath.map((p) => p.x);
+        const ys = drawingPath.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
         onAnnotationAdd({
           type: 'drawing',
-          page: pageNum,
+          page: drawingPageNum || pageNum,
+          x: minX,
+          y: minY,
           paths: drawingPath,
           color: '#000000',
         });
       }
       setDrawingPath([]);
+      setDrawingPageNum(1);
     },
-    [isDrawing, allowAnnotations, disabled, drawingPath, onAnnotationAdd]
+    [isDrawing, allowAnnotations, disabled, drawingPath, drawingPageNum, onAnnotationAdd]
   );
 
   if (loading) {
@@ -301,7 +308,7 @@ export function PDFViewer({
       <div className="pdf-viewer-controls">
         <div className="pdf-viewer-pagination">
           <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))}
             disabled={currentPage === 1 || disabled}
           >
             Previous
@@ -310,7 +317,7 @@ export function PDFViewer({
             Page {currentPage} of {numPages}
           </span>
           <button
-            onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+            onClick={() => setCurrentPage((p: number) => Math.min(numPages, p + 1))}
             disabled={currentPage === numPages || disabled}
           >
             Next
@@ -318,11 +325,11 @@ export function PDFViewer({
         </div>
 
         <div className="pdf-viewer-zoom">
-          <button onClick={() => setScale((s) => Math.max(0.5, s - 0.25))} disabled={disabled}>
+          <button onClick={() => setScale((s: number) => Math.max(0.5, s - 0.25))} disabled={disabled}>
             -
           </button>
           <span>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale((s) => Math.min(3, s + 0.25))} disabled={disabled}>
+          <button onClick={() => setScale((s: number) => Math.min(3, s + 0.25))} disabled={disabled}>
             +
           </button>
         </div>
@@ -362,13 +369,13 @@ export function PDFViewer({
           return (
             <div
               key={pageNum}
-              ref={(el) => {
+              ref={(el: HTMLDivElement | null) => {
                 if (el) pageRefs.current.set(pageNum, el);
               }}
               className={`pdf-viewer-page ${isVisible ? 'visible' : 'hidden'}`}
             >
               <canvas
-                ref={(el) => {
+                ref={(el: HTMLCanvasElement | null) => {
                   if (el) canvasRefs.current.set(pageNum, el);
                 }}
                 onClick={(e) => handleCanvasClick(e, pageNum)}

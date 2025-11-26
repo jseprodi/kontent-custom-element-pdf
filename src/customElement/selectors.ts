@@ -20,83 +20,132 @@ export function onDisabledChanged(
 }
 
 export async function promptToSelectAssets(
-  api: CustomElementApi,
+  _api: CustomElementApi,
   options: {
     allowMultiple?: boolean;
     fileType?: 'images' | 'any';
   } = {}
 ): Promise<Array<{ id: string; url: string; name: string }>> {
   return new Promise((resolve, reject) => {
-    const customElement = (window as any).CustomElement;
-    if (!customElement || !customElement.getSelectAsset) {
-      reject(new Error('Asset selection not available'));
+    // Check if we're in a Kontent.ai environment
+    if (typeof window === 'undefined' || !window.CustomElement) {
+      reject(new Error('Custom Element API not available'));
       return;
     }
 
-    customElement.getSelectAsset(
-      {
-        allowMultiple: options.allowMultiple ?? false,
-        fileType: options.fileType ?? 'any',
-      },
-      (assets: Array<{ id: string; url: string; name: string }>) => {
-        resolve(assets);
-      },
-      (error: Error) => {
-        reject(error);
-      }
-    );
+    const customElement = window.CustomElement as any;
+    
+    // Try different possible method names
+    const selectMethod = customElement.getSelectAsset || 
+                        customElement.selectAsset || 
+                        (customElement as any).getAssets;
+
+    if (!selectMethod || typeof selectMethod !== 'function') {
+      reject(new Error('Asset selection method not available. Make sure you are using this custom element within Kontent.ai.'));
+      return;
+    }
+
+    try {
+      // Kontent.ai Custom Element API pattern: method(options, successCallback, errorCallback)
+      selectMethod.call(
+        customElement,
+        {
+          allowMultiple: options.allowMultiple ?? false,
+          fileType: options.fileType ?? 'any',
+        },
+        (assets: Array<{ id: string; url: string; name: string }>) => {
+          if (Array.isArray(assets) && assets.length > 0) {
+            resolve(assets);
+          } else {
+            resolve([]);
+          }
+        },
+        (error: Error | string) => {
+          reject(new Error(typeof error === 'string' ? error : error.message || 'Failed to select asset'));
+        }
+      );
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error('Unknown error selecting asset'));
+    }
   });
 }
 
 export async function promptToSelectItems(
-  api: CustomElementApi,
+  _api: CustomElementApi,
   options: {
     allowMultiple?: boolean;
     contentTypes?: Array<{ id: string } | { codename: string }>;
   } = {}
 ): Promise<Array<{ id: string; codename: string; name: string }>> {
   return new Promise((resolve, reject) => {
-    const customElement = (window as any).CustomElement;
-    if (!customElement || !customElement.getSelectItems) {
-      reject(new Error('Item selection not available'));
+    if (typeof window === 'undefined' || !window.CustomElement) {
+      reject(new Error('Custom Element API not available'));
       return;
     }
 
-    customElement.getSelectItems(
-      {
-        allowMultiple: options.allowMultiple ?? false,
-        contentTypes: options.contentTypes ?? [],
-      },
-      (items: Array<{ id: string; codename: string; name: string }>) => {
-        resolve(items);
-      },
-      (error: Error) => {
-        reject(error);
-      }
-    );
+    const customElement = window.CustomElement as any;
+    const selectMethod = customElement.getSelectItems || 
+                        customElement.selectItems ||
+                        (customElement as any).getItems;
+
+    if (!selectMethod || typeof selectMethod !== 'function') {
+      reject(new Error('Item selection method not available'));
+      return;
+    }
+
+    try {
+      selectMethod.call(
+        customElement,
+        {
+          allowMultiple: options.allowMultiple ?? false,
+          contentTypes: options.contentTypes ?? [],
+        },
+        (items: Array<{ id: string; codename: string; name: string }>) => {
+          resolve(Array.isArray(items) ? items : []);
+        },
+        (error: Error | string) => {
+          reject(new Error(typeof error === 'string' ? error : error.message || 'Failed to select items'));
+        }
+      );
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error('Unknown error selecting items'));
+    }
   });
 }
 
 export function getElements(
-  api: CustomElementApi,
+  _api: CustomElementApi,
   elementCodenames: string[]
 ): Promise<ElementValue[]> {
   return new Promise((resolve, reject) => {
-    const customElement = (window as any).CustomElement;
-    if (!customElement || !customElement.getElements) {
-      reject(new Error('Element access not available'));
+    if (typeof window === 'undefined' || !window.CustomElement) {
+      reject(new Error('Custom Element API not available'));
       return;
     }
 
-    customElement.getElements(
-      elementCodenames,
-      (elements: ElementValue[]) => {
-        resolve(elements);
-      },
-      (error: Error) => {
-        reject(error);
-      }
-    );
+    const customElement = window.CustomElement as any;
+    const getMethod = customElement.getElements || 
+                     (customElement as any).getElementValues;
+
+    if (!getMethod || typeof getMethod !== 'function') {
+      reject(new Error('Element access method not available'));
+      return;
+    }
+
+    try {
+      getMethod.call(
+        customElement,
+        elementCodenames,
+        (elements: ElementValue[]) => {
+          resolve(Array.isArray(elements) ? elements : []);
+        },
+        (error: Error | string) => {
+          reject(new Error(typeof error === 'string' ? error : error.message || 'Failed to get elements'));
+        }
+      );
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error('Unknown error getting elements'));
+    }
   });
 }
 

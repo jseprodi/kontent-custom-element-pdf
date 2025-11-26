@@ -46,13 +46,27 @@ export function CustomElementProvider({
   );
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.CustomElement) {
-      console.error('CustomElement API not available');
+    if (typeof window === 'undefined') {
+      console.warn('Window object not available');
       return;
     }
 
-    window.CustomElement.init((elementApi: CustomElementApi) => {
-      setApi(elementApi);
+    // Wait for CustomElement API to be available
+    const checkAndInit = () => {
+      if (!window.CustomElement) {
+        console.warn('CustomElement API not yet available, retrying...');
+        setTimeout(checkAndInit, 100);
+        return;
+      }
+
+      try {
+        window.CustomElement.init((elementApi: CustomElementApi) => {
+          if (!elementApi) {
+            console.error('CustomElement API returned null/undefined');
+            return;
+          }
+
+          setApi(elementApi);
 
       // Parse initial value
       const initialValue = parseValue(elementApi.value);
@@ -80,11 +94,18 @@ export function CustomElementProvider({
         setHeight(elementApi, height);
       }
 
-      // Subscribe to disabled changes
-      onDisabledChanged(elementApi, (isDisabled) => {
-        setDisabled(isDisabled);
-      });
-    });
+          // Subscribe to disabled changes
+          onDisabledChanged(elementApi, (isDisabled) => {
+            setDisabled(isDisabled);
+          });
+        });
+      } catch (error) {
+        console.error('Error initializing CustomElement:', error);
+      }
+    };
+
+    // Start checking for API availability
+    checkAndInit();
   }, [height]);
 
   const setValue = useCallback(

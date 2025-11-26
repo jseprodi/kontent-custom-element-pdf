@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { PDFViewer } from './components/PDFViewer';
 import {
   useConfig,
@@ -6,8 +6,6 @@ import {
   useIsDisabled,
   useSelectPDFAsset,
   useAddAnnotation,
-  useUpdateAnnotation,
-  useDeleteAnnotation,
 } from './customElement/hooks';
 import type { PDFValue } from './customElement/value';
 
@@ -17,8 +15,6 @@ export function IntegrationApp() {
   const disabled = useIsDisabled();
   const selectPDFAsset = useSelectPDFAsset();
   const addAnnotation = useAddAnnotation();
-  const updateAnnotation = useUpdateAnnotation();
-  const deleteAnnotation = useDeleteAnnotation();
 
   const [loading, setLoading] = useState(false);
 
@@ -74,18 +70,6 @@ export function IntegrationApp() {
     }
   };
 
-  const handleAnnotationUpdate = (id: string, updates: Parameters<typeof updateAnnotation>[1]) => {
-    if (allowAnnotations && !disabled) {
-      updateAnnotation(id, updates);
-    }
-  };
-
-  const handleAnnotationDelete = (id: string) => {
-    if (allowAnnotations && !disabled) {
-      deleteAnnotation(id);
-    }
-  };
-
   // Get PDF source
   const pdfUrl = value.pdfUrl;
   const pdfData = value.pdfData;
@@ -121,8 +105,6 @@ export function IntegrationApp() {
             pdfData={pdfData}
             annotations={value.annotations || []}
             onAnnotationAdd={handleAnnotationAdd}
-            onAnnotationUpdate={handleAnnotationUpdate}
-            onAnnotationDelete={handleAnnotationDelete}
             allowAnnotations={allowAnnotations}
             disabled={disabled}
           />
@@ -149,7 +131,18 @@ export function IntegrationApp() {
                 )}
                 {!disabled && (
                   <button
-                    onClick={() => handleAnnotationDelete(annotation.id)}
+                    onClick={() => {
+                      // Delete annotation by filtering it out
+                      const updatedAnnotations = value.annotations.filter(
+                        (ann) => ann.id !== annotation.id
+                      );
+                      const updatedValue: PDFValue = {
+                        ...value,
+                        annotations: updatedAnnotations,
+                        version: (value.version || 1) + 1,
+                      };
+                      setValue(updatedValue);
+                    }}
                     className="button button-small"
                   >
                     Delete
