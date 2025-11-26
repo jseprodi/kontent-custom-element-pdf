@@ -35,10 +35,12 @@ export async function promptToSelectAssets(
 
     const customElement = window.CustomElement as any;
     
-    // Try different possible method names
+    // Try different possible method names - check both on CustomElement and as static methods
     const selectMethod = customElement.getSelectAsset || 
                         customElement.selectAsset || 
-                        (customElement as any).getAssets;
+                        (customElement as any).getAssets ||
+                        (window as any).CustomElement?.getSelectAsset ||
+                        (window as any).CustomElement?.selectAsset;
 
     if (!selectMethod || typeof selectMethod !== 'function') {
       reject(new Error('Asset selection method not available. Make sure you are using this custom element within Kontent.ai.'));
@@ -47,23 +49,27 @@ export async function promptToSelectAssets(
 
     try {
       // Kontent.ai Custom Element API pattern: method(options, successCallback, errorCallback)
-      selectMethod.call(
-        customElement,
-        {
-          allowMultiple: options.allowMultiple ?? false,
-          fileType: options.fileType ?? 'any',
-        },
-        (assets: Array<{ id: string; url: string; name: string }>) => {
-          if (Array.isArray(assets) && assets.length > 0) {
-            resolve(assets);
-          } else {
-            resolve([]);
+      // Try calling directly first, then with .call() if needed
+      if (typeof selectMethod === 'function') {
+        selectMethod(
+          {
+            allowMultiple: options.allowMultiple ?? false,
+            fileType: options.fileType ?? 'any',
+          },
+          (assets: Array<{ id: string; url: string; name: string }>) => {
+            if (Array.isArray(assets) && assets.length > 0) {
+              resolve(assets);
+            } else {
+              resolve([]);
+            }
+          },
+          (error: Error | string) => {
+            reject(new Error(typeof error === 'string' ? error : error.message || 'Failed to select asset'));
           }
-        },
-        (error: Error | string) => {
-          reject(new Error(typeof error === 'string' ? error : error.message || 'Failed to select asset'));
-        }
-      );
+        );
+      } else {
+        reject(new Error('Asset selection method is not a function'));
+      }
     } catch (error) {
       reject(error instanceof Error ? error : new Error('Unknown error selecting asset'));
     }

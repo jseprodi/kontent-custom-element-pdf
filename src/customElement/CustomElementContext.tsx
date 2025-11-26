@@ -68,26 +68,32 @@ export function CustomElementProvider({
 
           setApi(elementApi);
 
-      // Parse initial value
-      const initialValue = parseValue(elementApi.value);
-      setValueState(initialValue);
+          // Parse initial value
+          const initialValue = parseValue(elementApi.value);
+          setValueState(initialValue);
 
-      // Parse and validate config
-      if (validateConfig(elementApi.config)) {
-        setConfig(elementApi.config);
-      }
+          // Parse and validate config
+          if (validateConfig(elementApi.config)) {
+            setConfig(elementApi.config);
+          }
 
-      // Set initial disabled state
-      setDisabled(elementApi.disabled);
+          // Set initial disabled state
+          setDisabled(elementApi.disabled);
 
-      // Set environment ID
-      setEnvironmentId(elementApi.env.id);
+          // Set environment ID (with null check)
+          if (elementApi.env && elementApi.env.id) {
+            setEnvironmentId(elementApi.env.id);
+          }
 
-      // Set item info
-      setItemInfo(elementApi.item);
+          // Set item info (with null check)
+          if (elementApi.item) {
+            setItemInfo(elementApi.item);
+          }
 
-      // Set variant info
-      setVariantInfo(elementApi.context.variant);
+          // Set variant info (with null check)
+          if (elementApi.context && elementApi.context.variant) {
+            setVariantInfo(elementApi.context.variant);
+          }
 
       // Set initial height
       if (height !== 'default') {
