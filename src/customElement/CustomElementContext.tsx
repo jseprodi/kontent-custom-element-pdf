@@ -95,10 +95,14 @@ export function CustomElementProvider({
             setVariantInfo(elementApi.context.variant);
           }
 
-      // Set initial height
-      if (height !== 'default') {
-        setHeight(elementApi, height);
-      }
+          // Set initial height
+          if (height !== 'default' && elementApi && typeof elementApi.setHeight === 'function') {
+            try {
+              setHeight(elementApi, height);
+            } catch (error) {
+              console.warn('Could not set initial height:', error);
+            }
+          }
 
           // Subscribe to disabled changes
           onDisabledChanged(elementApi, (isDisabled) => {
@@ -116,8 +120,17 @@ export function CustomElementProvider({
 
   const setValue = useCallback(
     (newValue: string) => {
-      if (api) {
-        api.setValue(newValue);
+      if (api && typeof api.setValue === 'function') {
+        try {
+          api.setValue(newValue);
+          setValueState(parseValue(newValue));
+        } catch (error) {
+          console.error('Error setting value:', error);
+          // Still update local state even if API call fails
+          setValueState(parseValue(newValue));
+        }
+      } else {
+        // API not available, just update local state
         setValueState(parseValue(newValue));
       }
     },
@@ -126,8 +139,12 @@ export function CustomElementProvider({
 
   const handleSetHeight = useCallback(
     (newHeight: number | 'default' | 'dynamic') => {
-      if (api) {
-        setHeight(api, newHeight);
+      if (api && typeof api.setHeight === 'function') {
+        try {
+          setHeight(api, newHeight);
+        } catch (error) {
+          console.error('Error setting height:', error);
+        }
       }
     },
     [api]

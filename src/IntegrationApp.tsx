@@ -28,9 +28,17 @@ export function IntegrationApp() {
     try {
       const asset = await selectPDFAsset();
       if (asset) {
-        // Fetch the PDF and convert to base64
+        // Try to fetch the PDF and convert to base64, but handle CORS errors gracefully
         try {
-          const response = await fetch(asset.url);
+          const response = await fetch(asset.url, {
+            mode: 'cors',
+            credentials: 'omit',
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
           const blob = await response.blob();
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -44,10 +52,21 @@ export function IntegrationApp() {
             setValue(updatedValue);
             setLoading(false);
           };
+          reader.onerror = () => {
+            // If reading fails, just use URL
+            const updatedValue: PDFValue = {
+              ...value,
+              pdfUrl: asset.url,
+              version: (value.version || 1) + 1,
+            };
+            setValue(updatedValue);
+            setLoading(false);
+          };
           reader.readAsDataURL(blob);
         } catch (error) {
-          console.error('Error loading PDF:', error);
-          // Fallback to URL only
+          console.warn('Could not fetch PDF (CORS or network issue), using URL directly:', error);
+          // CORS or network error - just use the URL directly
+          // PDF.js can load from URL even with CORS restrictions in some cases
           const updatedValue: PDFValue = {
             ...value,
             pdfUrl: asset.url,
@@ -84,10 +103,17 @@ export function IntegrationApp() {
         return;
       }
 
-      // Try to fetch and convert to base64
+      // Try to fetch and convert to base64, but handle CORS gracefully
       try {
-        const response = await fetch(manualUrl);
-        if (!response.ok) throw new Error('Failed to fetch PDF');
+        const response = await fetch(manualUrl, {
+          mode: 'cors',
+          credentials: 'omit',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const blob = await response.blob();
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -103,10 +129,22 @@ export function IntegrationApp() {
           setShowManualInput(false);
           setManualUrl('');
         };
+        reader.onerror = () => {
+          // If reading fails, just use URL
+          const updatedValue: PDFValue = {
+            ...value,
+            pdfUrl: manualUrl,
+            version: (value.version || 1) + 1,
+          };
+          setValue(updatedValue);
+          setLoading(false);
+          setShowManualInput(false);
+          setManualUrl('');
+        };
         reader.readAsDataURL(blob);
       } catch (error) {
-        console.error('Error loading PDF from URL:', error);
-        // Fallback to URL only
+        console.warn('Could not fetch PDF (CORS or network issue), using URL directly:', error);
+        // CORS or network error - just use the URL directly
         const updatedValue: PDFValue = {
           ...value,
           pdfUrl: manualUrl,

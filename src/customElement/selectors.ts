@@ -5,11 +5,19 @@ export function getValue(api: CustomElementApi): string {
 }
 
 export function setValue(api: CustomElementApi, value: string): void {
-  api.setValue(value);
+  if (api && typeof api.setValue === 'function') {
+    api.setValue(value);
+  } else {
+    console.warn('setValue method not available on Custom Element API');
+  }
 }
 
 export function setHeight(api: CustomElementApi, height: number | 'default' | 'dynamic'): void {
-  api.setHeight(height);
+  if (api && typeof api.setHeight === 'function') {
+    api.setHeight(height);
+  } else {
+    console.warn('setHeight method not available on Custom Element API');
+  }
 }
 
 export function onDisabledChanged(
